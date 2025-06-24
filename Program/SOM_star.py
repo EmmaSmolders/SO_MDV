@@ -1,4 +1,4 @@
-#Program determines the MOV index
+#Program determines the SOM star index
 
 from pylab import *
 import numpy
