@@ -209,7 +209,7 @@ for year_i in range(num_year):
 	for month_i in range(12):
 
 		#Get the monthly files
-    filename 	= files[year_i*12 + month_i]
+    		filename 	= files[year_i*12 + month_i]
 
 		print(filename)
 		temp_year[month_i], volume_norm = ReadinData(filename, depth_min, depth_max, True, volume_norm)
