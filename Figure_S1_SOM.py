@@ -41,7 +41,7 @@ from scipy.io import loadmat
 from statsmodels.graphics.gofplots import qqplot
 
 #Making pathway to folder with all data
-directory = r'/Users/6008399/Documents/PhD/HR_POP/netcdf/'
+directory = r'/../../Data/'
 directory_figures = r'/Users/6008399/Documents/PhD/HR_POP/Figures/'
 
 #%% Read in data 
