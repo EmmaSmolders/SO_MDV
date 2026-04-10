@@ -7,6 +7,7 @@ import time
 import glob, os
 import math
 import netCDF4 as netcdf
+import gsw
 
 #Making pathway to folder with all data
 directory_data	= '/projects/0/prace_imau/prace_2013081679/pop/tx0.1v2/pop.B2000.tx0.1v2.qe_hosing.001/tavg/'
@@ -37,24 +38,66 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 	lon[lon>180]	= lon[lon>180] - 360.0
 
 	#Select region
-	lon_min_index	= (fabs(lon - -60)).argmin()
-	lon_max_index	= (fabs(lon - -0)).argmin() + 1
-	lat_min_index	= (fabs(lat - -75)).argmin()
+	lon_min_index	= (fabs(lon - 25)).argmin()
+	lon_max_index	= (fabs(lon - 150)).argmin() + 1
+	lat_min_index	= (fabs(lat - -90)).argmin()
 	lat_max_index	= (fabs(lat - 10)).argmin() + 1	
+	
+	#WGKP
+	#lon_min_index	= (fabs(lon - -35)).argmin()
+	#lon_max_index	= (fabs(lon - 80)).argmin() + 1
+	#lat_min_index	= (fabs(lat - -90)).argmin()
+	#lat_max_index	= (fabs(lat - -50)).argmin() + 1
+	
+	#NZ (but turn of the negative longitudes 
+	#lon_min_index	= (fabs(lon - 150)).argmin()
+	#lon_max_index	= (fabs(lon - 190)).argmin() + 1
+	#lat_min_index	= (fabs(lat - -70)).argmin()
+	#lat_max_index	= (fabs(lat - -60)).argmin() + 1
+	
+	#AU
+	#lon_min_index	= (fabs(lon - 80)).argmin()
+	#lon_max_index	= (fabs(lon - 150)).argmin() + 1
+	#lat_min_index	= (fabs(lat - -70)).argmin()
+	#lat_max_index	= (fabs(lat - -40)).argmin() + 1
+	
+	#Pacific convective region
+	#lon_min_index	= (fabs(lon - -110)).argmin()
+	#lon_max_index	= (fabs(lon - -60)).argmin() + 1
+	#lat_min_index	= (fabs(lat - -70)).argmin()
+	#lat_max_index	= (fabs(lat - -40)).argmin() + 1
 	
 	lon		= lon[lon_min_index:lon_max_index]
 	lat		= lat[lat_min_index:lat_max_index]
 	depth_grid	= depth_grid[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
 	area		= area[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
 	grid_y		= grid_y[lat_min_index:lat_max_index]
+	
+	print(lon)
+	
+	#sys.exit()
 		
 	fh = netcdf.Dataset(filename, 'r')
 
 	temp 		= fh.variables['TEMP'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index]		#Potential temperature (deg C)
 	salt 		= fh.variables['SALT'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] * 1000. 	#Salinity (g /kg)
-	dens		= fh.variables['PD'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] * 1000.	#Potential density (kg / m3)
+	#dens		= fh.variables['PD'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] * 1000.	#Potential density (kg / m3)
 	
 	fh.close()
+	
+	#Mask the area
+	temp		= ma.masked_where(salt <= 0, temp)	
+	salt		= ma.masked_where(salt <= 0, salt)
+	
+	dens 		= ma.masked_all((len(depth), len(lat), len(lon)))
+	
+	for depth_i in range(len(depth)):
+		#print(depth_i)
+		#First determine the conservative temperature from the potential temperature
+		temp_CT		= gsw.CT_from_pt(salt[depth_i], temp[depth_i])
+		
+		#Get the potential density
+		dens[depth_i]		= gsw.sigma0(salt[depth_i], temp_CT)+1000.0
 	
 	for depth_i in range(len(depth)):
 		#Mask all the field at the topography
@@ -91,6 +134,39 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 		volume			= ma.masked_where(volume <= 0, volume)
 		volume_norm		= ma.masked_all(np.shape(volume))
 		
+		print(volume_norm.shape)
+		
+		print('Data is written to file')
+		fh = netcdf.Dataset(directory+'Ocean/Volume_90S_10N_25E_150E_Indian_basin.nc', 'w')
+
+		fh.createDimension('lat', len(lat))
+		fh.createDimension('lon', len(lon))
+		fh.createDimension('depth', len(depth))
+
+		fh.createVariable('depth', float, ('depth'), zlib=True)
+		fh.createVariable('lat', float, ('lat'), zlib=True)
+		fh.createVariable('lon', float, ('lon'), zlib=True)
+		fh.createVariable('volume', float, ('depth', 'lat', 'lon'), zlib=True)
+
+		fh.variables['lat'].long_name 		= 'Latitudes'
+		fh.variables['depth'].long_name 	= 'Depth'
+		fh.variables['lon'].long_name 		= 'Longitudes'
+		fh.variables['volume'].long_name 	= 'Volume of gridcells taking partial bottom cells into account (layer_field * area)'
+
+		fh.variables['depth'].units 		= 'm'
+		fh.variables['lat'].units 		= 'degN'
+		fh.variables['lon'].units 		= 'degE'
+
+		#Writing data to correct variable
+		fh.variables['lat'][:] 			= lat
+		fh.variables['depth'][:] 		= depth
+		fh.variables['lon'][:] 			= lon
+		fh.variables['volume'][:] 		= volume
+
+		fh.close()
+		
+		sys.exit()
+		
 		for depth_i in range(len(depth)):
 			for lat_i in range(len(lat)):	
 				#Normalise the field for each latitude and depth layer
@@ -114,9 +190,9 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 #--------------------------------MAIN SCRIPT STARTS HERE----------------------------------
 #-----------------------------------------------------------------------------------------
 
-#Second SOM cycle (model year 45-91), last SOM cycle (495-571)
-year_start	= 63
-year_end	= 114
+#First or last 100 years
+year_start	= 500
+year_end	= 600
 
 files = []
 
@@ -199,7 +275,7 @@ dens_transect = np.nanmean(dens_all, axis = 0)
 #-----------------------------------------------------------------------------------------
 
 print('Data is written to file')
-fh = netcdf.Dataset(directory+'Ocean/TEMP_SALT_DENS_year_'+str(year_start)+'-'+str(year_end)+'_zonal_averaged_60W_0W_transect_SO.nc', 'w')
+fh = netcdf.Dataset(directory+'Ocean/TEMP_SALT_DENS_year_'+str(year_start)+'-'+str(year_end)+'_zonal_averaged_110W_60W_PA_SO.nc', 'w')
 
 fh.createDimension('lat', len(lat))
 fh.createDimension('depth', len(depth))
