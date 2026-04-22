@@ -1,0 +1,354 @@
+#Program determines zonal and annual averaged temperature, salinity and potential density
+
+from pylab import *
+import numpy
+import datetime
+import time
+import glob, os
+import math
+import netCDF4 as netcdf
+import gsw
+
+#Making pathway to folder with all data
+directory_data	= '/projects/0/prace_imau/prace_2013081679/pop/tx0.1v2/pop.B2000.tx0.1v2.qe_hosing.001/tavg/'
+directory	= '/home/smolders/HR_POP/Data/'
+
+def ReadinData(filename, layer_avail = False, volume_norm = False):
+	#The CESM grid is structured as
+	#S - S -
+	#- U* - U = 34S
+	#S* - S - 
+	#Where the stars have the same index
+
+	fh = netcdf.Dataset("/projects/0/prace_imau/prace_2013081679/pop/tx0.1v2/pop.B2000.tx0.1v2.qe_hosing.001/rcp8.5_co2_f05_t12.pop.h.2001-01.nc", 'r')
+
+	#Grid is rectangular up to 28N
+	lon 		= fh.variables['TLONG'][400]		#Longitude (at lat-index 400 there is no land mask, continious longitudes)
+	lat 		= fh.variables['TLAT'][:, 780]		#Latitude  (at lon-index 780 there is no land mask, continious latitudes)
+	depth_grid	= fh.variables['HT'][:] / 100		#Depth of bathymetry
+	area		= fh.variables['TAREA'][:] / 10000	#TAREA (m^2)
+	depth   	= fh.variables['z_t'][:]  / 100.0	#Depth (m)
+	layer		= fh.variables['dz'][:] / 100.0		#Layer thickness (m)
+	depth_top	= fh.variables['z_w_top'][:] / 100.0	#Top of grid cell
+	grid_x		= fh.variables['DXT'][400, :] / 100.0	#Zonal grid cell length (m)
+	
+	fh.close()
+
+	print(np.shape(grid_x))
+	print(np.shape(lon))
+
+	#Select region
+	region 		= 'WGKP' #'Indian', or 'Atlantic', or 'NZ', or 'AU', or 'PA', or 'WGKP'. For 'Pacific', see other script
+	
+	if region	== 'Indian':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= 25
+		lon_max 	= 150
+		lat_min 	= -90
+		lat_max 	= -40
+		
+	elif region 	== 'Atlantic':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= -60
+		lon_max 	= 25	
+		lat_min 	= -90
+		lat_max 	= -40
+		
+	elif region 	== 'NZ': #We don't want negative longitudes here
+		lon_min 	= 150
+		lon_max 	= 190
+		lat_min 	= -70
+		lat_max 	= -60
+		
+	elif region 	== 'AU':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= 80
+		lon_max 	= 150
+		lat_min 	= -70
+		lat_max 	= -40
+				
+	elif region 	== 'PA':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= -110
+		lon_max 	= -60
+		lat_min 	= -70
+		lat_max 	= -40
+				
+	elif region 	== 'WGKP':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= -35
+		lon_max 	= 80	
+		lat_min 	= -80
+		lat_max 	= -50		
+		
+	lon_min_index	= (fabs(lon - lon_min)).argmin()
+	lon_max_index	= (fabs(lon - lon_max)).argmin() + 1
+	lat_min_index	= (fabs(lat - lat_min)).argmin()
+	lat_max_index	= (fabs(lat - lat_max)).argmin() + 1	
+	
+	lon		= lon[lon_min_index:lon_max_index]
+	lat		= lat[lat_min_index:lat_max_index]
+	depth_grid	= depth_grid[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
+	area		= area[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
+	grid_x		= grid_x[lon_min_index:lon_max_index]
+	
+	print(lon)
+	
+	#sys.exit()
+		
+	fh = netcdf.Dataset(filename, 'r')
+
+	temp 		= fh.variables['TEMP'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index]		#Potential temperature (deg C)
+	salt 		= fh.variables['SALT'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] * 1000. 	#Salinity (g /kg)
+	#dens		= fh.variables['PD'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] * 1000.	#Potential density (kg / m3)
+	
+	fh.close()
+	
+	#Mask the area
+	temp		= ma.masked_where(salt <= 0, temp)	
+	salt		= ma.masked_where(salt <= 0, salt)
+	
+	dens 		= ma.masked_all((len(depth), len(lat), len(lon)))
+	
+	for depth_i in range(len(depth)):
+		#print(depth_i)
+		#First determine the conservative temperature from the potential temperature
+		temp_CT		= gsw.CT_from_pt(salt[depth_i], temp[depth_i])
+		
+		#Get the potential density
+		dens[depth_i]		= gsw.sigma0(salt[depth_i], temp_CT)+1000.0
+	
+	for depth_i in range(len(depth)):
+		#Mask all the field at the topography
+		temp[depth_i]	= ma.masked_where(depth_grid <= depth_top[depth_i], temp[depth_i])
+		salt[depth_i]	= ma.masked_where(depth_grid <= depth_top[depth_i], salt[depth_i])
+		dens[depth_i]	= ma.masked_where(depth_grid <= depth_top[depth_i], dens[depth_i])
+
+	#------------------------------------------------------------------------------
+	if layer_avail	== False:	
+		#Determine the depth per grid cell (parcel bottom cells)
+		layer_field	= ma.masked_all((len(depth), len(lat), len(lon)))
+
+		for depth_i in range(len(layer)):
+			#print(depth_i)
+
+			#Mask all elements which are land and fill the layer field with the depth layer for each layer
+			salt_depth		= salt[depth_i]
+			salt_depth		= ma.masked_where(salt_depth <= 0, salt_depth)
+			layer_field[depth_i]	= layer[depth_i]
+			layer_field[depth_i]	= ma.masked_array(layer_field[depth_i], mask = salt_depth.mask)
+
+			#Determine where the layer needs to be adjusted, partial depth cells
+			depth_diff		= np.sum(layer_field, axis = 0) - depth_grid
+
+			#If the depth difference is negative (i.e. bottom is not reached), set to zero
+			depth_diff		= ma.masked_where(depth_diff < 0, depth_diff)
+			depth_diff		= depth_diff.filled(fill_value = 0.0)
+
+			#Subtract the difference of the current layer with the difference
+			layer_field[depth_i]	= layer_field[depth_i] - depth_diff
+
+		#Get the total vertical extent for each layer
+		volume			= layer_field * area
+		volume			= ma.masked_where(volume <= 0, volume)
+		volume_norm		= ma.masked_all(np.shape(volume))
+		
+		print(volume_norm.shape)
+		
+		#print('Data is written to file')
+		#fh = netcdf.Dataset(directory+'Ocean/Volume_90S_10N_25E_150E_Indian_basin.nc', 'w')
+
+		#fh.createDimension('lat', len(lat))
+		#fh.createDimension('lon', len(lon))
+		#fh.createDimension('depth', len(depth))
+
+		#fh.createVariable('depth', float, ('depth'), zlib=True)
+		#fh.createVariable('lat', float, ('lat'), zlib=True)
+		#fh.createVariable('lon', float, ('lon'), zlib=True)
+		#fh.createVariable('volume', float, ('depth', 'lat', 'lon'), zlib=True)
+
+		#fh.variables['lat'].long_name 		= 'Latitudes'
+		#fh.variables['depth'].long_name 	= 'Depth'
+		#fh.variables['lon'].long_name 		= 'Longitudes'
+		#fh.variables['volume'].long_name 	= 'Volume of gridcells taking partial bottom cells into account (layer_field * area)'
+
+		#fh.variables['depth'].units 		= 'm'
+		#fh.variables['lat'].units 		= 'degN'
+		#fh.variables['lon'].units 		= 'degE'
+
+		#Writing data to correct variable
+		#fh.variables['lat'][:] 			= lat
+		#fh.variables['depth'][:] 		= depth
+		#fh.variables['lon'][:] 			= lon
+		#fh.variables['volume'][:] 		= volume
+
+		#fh.close()
+		
+		#sys.exit()
+		
+		for depth_i in range(len(depth)):
+			for lon_i in range(len(lon)):	
+				#Normalise the field for each longirude and depth layer
+				volume_norm[depth_i, :, lon_i]	= volume[depth_i, :, lon_i] / np.sum(volume[depth_i, :, lon_i])
+				
+		print(np.shape(volume_norm))
+				
+	#Take the volume-averaged meridional mean for temperature
+	temp		= np.sum(temp * volume_norm, axis = 1)
+	salt		= np.sum(salt * volume_norm, axis = 1)
+	dens		= np.sum(dens * volume_norm, axis = 1)
+	
+	#print(np.min(dens))
+	
+	#CS	= contourf(lat, depth, dens, levels = np.arange(1024, 1030.1, 0.1), extend = 'both', cmap = 'Spectral_r')
+	#colorbar(CS)
+	#show()
+	#sys.exit()
+		
+	return lon, depth, volume_norm, grid_x, temp, salt, dens, lat_min, lat_max, region
+	
+#-----------------------------------------------------------------------------------------
+#--------------------------------MAIN SCRIPT STARTS HERE----------------------------------
+#-----------------------------------------------------------------------------------------
+
+#First or last 100 years
+year_start	= 1
+year_end	= 100
+
+files = []
+
+files_all	= glob.glob(directory_data+'t.t0.1_42l_nccs01.*.nc')
+files_all.sort()
+
+for file_i in range(len(files_all)):
+
+	if len(files_all[file_i]) == 116:
+		files.append(files_all[file_i])
+
+#note that january 300 is written in feb 300 etc.
+files	= files[(year_start-1)*12:year_end*12]
+
+print(files[0])
+print(files[-1])
+
+#-----------------------------------------------------------------------------------------
+lon, depth, volume_norm, grid_x, temp, salt, dens, lat_min, lat_max, region	= ReadinData(files[0])
+time_year				= ma.masked_all(year_end-year_start+1)
+temp_all				= ma.masked_all((len(time_year), len(depth), len(lon)))
+salt_all				= ma.masked_all((len(time_year), len(depth), len(lon)))
+dens_all				= ma.masked_all((len(time_year), len(depth), len(lon)))
+
+temp_transect				= ma.masked_all((len(depth), len(lon)))
+salt_transect				= ma.masked_all((len(depth), len(lon)))
+dens_transect				= ma.masked_all((len(depth), len(lon)))
+
+print(np.shape(temp))
+print(np.shape(depth))
+print(np.shape(lon))
+
+for year_i in range(len(time_year)):
+	
+	#Now determine for each month
+	print(year_i)
+	time_year[year_i] 	= year_i + year_start
+
+	temp_year 		= ma.masked_all((12, len(depth), len(lon)))
+	salt_year 		= ma.masked_all((12, len(depth), len(lon)))
+	dens_year		= ma.masked_all((12, len(depth), len(lon)))
+		
+	for month_i in range(12):
+
+		#Get the monthly files (data from last 90 years for forward hosing is in subfolder)
+		filename 	= files[year_i*12 + month_i]
+
+		print(filename)
+		#lat, depth, volume_norm, grid_y, temp_year[month_i] = ReadinData(filename)
+		lon, depth, volume_norm, grid_x, temp_year[month_i], salt_year[month_i], dens_year[month_i], lat_min, lat_max, region = ReadinData(filename)
+
+	#------------------------------------------------------------------------------
+	month_days	= np.asarray([31., 28., 31., 30., 31., 30., 31., 31., 30., 31., 30., 31.])
+	month_days	= month_days / np.sum(month_days)
+
+	#Fill the array's with the same dimensions
+	month_days_all	= ma.masked_all((len(month_days), len(depth), len(lon)))
+
+	for month_i in range(len(month_days)):
+		month_days_all[month_i]		= month_days[month_i]
+
+	#-----------------------------------------------------------------------------------------
+
+	#Determine the time mean over the months of choice
+	temp_all[year_i]	= np.sum(temp_year * month_days_all, axis = 0)
+	salt_all[year_i]	= np.sum(salt_year * month_days_all, axis = 0)
+	dens_all[year_i]	= np.sum(dens_year * month_days_all, axis = 0)
+	
+#time mean over SOM cycle
+temp_transect = np.nanmean(temp_all, axis = 0)
+salt_transect = np.nanmean(salt_all, axis = 0)
+dens_transect = np.nanmean(dens_all, axis = 0)
+	
+#print(np.shape(temp_all))
+
+#contourf(lat, depth, salt_transect)
+#show()	
+
+#-----------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------
+
+print('Data is written to file')
+fh = netcdf.Dataset(directory+'Ocean/TEMP_SALT_DENS_year_'+str(year_start)+'-'+str(year_end)+'_meridional_averaged_'+str(lat_min)+'N-'+str(lat_max)+'N_'+str(region)+'_SO.nc', 'w')
+
+fh.createDimension('lon', len(lon))
+fh.createDimension('depth', len(depth))
+fh.createDimension('time', len(time_year))
+
+fh.createVariable('lon', float, ('lon'), zlib=True)
+fh.createVariable('depth', float, ('depth'), zlib=True)
+fh.createVariable('time', float, ('time'), zlib=True)
+fh.createVariable('TEMP_all', float, ('time', 'depth', 'lon'), zlib=True)
+fh.createVariable('SALT_all', float, ('time', 'depth', 'lon'), zlib=True)
+fh.createVariable('PD_all', float, ('time', 'depth', 'lon'), zlib=True)
+fh.createVariable('TEMP', float, ('depth', 'lon'), zlib=True)
+fh.createVariable('SALT', float, ('depth', 'lon'), zlib=True)
+fh.createVariable('PD', float, ('depth', 'lon'), zlib=True)
+fh.createVariable('DXT', float, ('lon'), zlib=True)
+
+fh.variables['lon'].long_name 		= 'Array of t-longitudes'
+fh.variables['DXT'].long_name		= 'Zonal grid spacing'
+fh.variables['depth'].long_name 	= 'Depth'
+fh.variables['TEMP'].long_name 		= 'Time averaged Potential temperature'
+fh.variables['SALT'].long_name 		= 'Time averaged Salinity'
+fh.variables['PD'].long_name 		= 'Time averaged Potential density'
+fh.variables['TEMP_all'].long_name 	= 'Potential temperature'
+fh.variables['SALT_all'].long_name 	= 'Salinity'
+fh.variables['PD_all'].long_name 	= 'Potential density'
+
+fh.variables['depth'].units 		= 'm'
+fh.variables['lat'].units 		= 'Degrees N'
+fh.variables['DXT'].units		= 'm'
+fh.variables['TEMP'].units 		= 'deg C'
+fh.variables['SALT'].units 		= 'g / kg'
+fh.variables['PD'].units 		= 'kg/m^3'
+fh.variables['TEMP_all'].units 		= 'deg C'
+fh.variables['SALT_all'].units 		= 'g / kg'
+fh.variables['PD_all'].units 		= 'kg/m^3'
+
+#Writing data to correct variable
+fh.variables['depth'][:] 		= depth
+fh.variables['lat'][:] 			= lat
+fh.variables['DXT'][:]			= grid_x
+fh.variables['TEMP'][:] 		= temp_transect
+fh.variables['SALT'][:] 		= salt_transect
+fh.variables['PD'][:] 			= dens_transect
+fh.variables['TEMP_all'][:] 		= temp_all
+fh.variables['SALT_all'][:] 		= salt_all
+fh.variables['PD_all'][:] 		= dens_all
+
+fh.close()	
+	
+	
