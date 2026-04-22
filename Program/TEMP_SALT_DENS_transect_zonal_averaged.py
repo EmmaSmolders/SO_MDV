@@ -33,39 +33,52 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 	grid_y		= fh.variables['DYT'][:, 780] / 100.0	#Meridional grid cell length (m). Note that from a certain latitude it differs per longitude. But we're intersted in the south, so for each longitude it's the same.
 	
 	fh.close()
-	
-	#Use negative longitudes for 180W - 0W
-	lon[lon>180]	= lon[lon>180] - 360.0
 
 	#Select region
-	lon_min_index	= (fabs(lon - 25)).argmin()
-	lon_max_index	= (fabs(lon - 150)).argmin() + 1
-	lat_min_index	= (fabs(lat - -90)).argmin()
-	lat_max_index	= (fabs(lat - 10)).argmin() + 1	
+	lat_min = -90
+	lat_max = 10
 	
-	#WGKP
-	#lon_min_index	= (fabs(lon - -35)).argmin()
-	#lon_max_index	= (fabs(lon - 80)).argmin() + 1
-	#lat_min_index	= (fabs(lat - -90)).argmin()
-	#lat_max_index	= (fabs(lat - -50)).argmin() + 1
+	region 		= 'Atlantic' #'Indian', or 'Atlantic', or 'NZ', or 'AU', or 'PA', or 'WGKP'. For 'Pacific', see other script
 	
-	#NZ (but turn of the negative longitudes 
-	#lon_min_index	= (fabs(lon - 150)).argmin()
-	#lon_max_index	= (fabs(lon - 190)).argmin() + 1
-	#lat_min_index	= (fabs(lat - -70)).argmin()
-	#lat_max_index	= (fabs(lat - -60)).argmin() + 1
-	
-	#AU
-	#lon_min_index	= (fabs(lon - 80)).argmin()
-	#lon_max_index	= (fabs(lon - 150)).argmin() + 1
-	#lat_min_index	= (fabs(lat - -70)).argmin()
-	#lat_max_index	= (fabs(lat - -40)).argmin() + 1
-	
-	#Pacific convective region
-	#lon_min_index	= (fabs(lon - -110)).argmin()
-	#lon_max_index	= (fabs(lon - -60)).argmin() + 1
-	#lat_min_index	= (fabs(lat - -70)).argmin()
-	#lat_max_index	= (fabs(lat - -40)).argmin() + 1
+	if region	== 'Indian':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= 25
+		lon_max 	= 150
+		
+	elif region 	== 'Atlantic':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= -60
+		lon_max 	= 25	
+		
+	elif region 	== 'NZ': #We don't want negative longitudes here
+		lon_min 	= 150
+		lon_max 	= 190
+
+	elif region 	== 'AU':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= 80
+		lon_max 	= 150
+		
+	elif region 	== 'PA':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= -110
+		lon_max 	= -60
+		
+	elif region 	== 'WGKP':
+		#Use negative longitudes for 180W - 0W
+		lon[lon>180]	= lon[lon>180] - 360.0
+		lon_min 	= -35
+		lon_max 	= 80	
+		
+		
+	lon_min_index	= (fabs(lon - lon_min)).argmin()
+	lon_max_index	= (fabs(lon - lon_max)).argmin() + 1
+	lat_min_index	= (fabs(lat - lat_min)).argmin()
+	lat_max_index	= (fabs(lat - lat_max)).argmin() + 1	
 	
 	lon		= lon[lon_min_index:lon_max_index]
 	lat		= lat[lat_min_index:lat_max_index]
@@ -136,36 +149,36 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 		
 		print(volume_norm.shape)
 		
-		print('Data is written to file')
-		fh = netcdf.Dataset(directory+'Ocean/Volume_90S_10N_25E_150E_Indian_basin.nc', 'w')
+		#print('Data is written to file')
+		#fh = netcdf.Dataset(directory+'Ocean/Volume_90S_10N_25E_150E_Indian_basin.nc', 'w')
 
-		fh.createDimension('lat', len(lat))
-		fh.createDimension('lon', len(lon))
-		fh.createDimension('depth', len(depth))
+		#fh.createDimension('lat', len(lat))
+		#fh.createDimension('lon', len(lon))
+		#fh.createDimension('depth', len(depth))
 
-		fh.createVariable('depth', float, ('depth'), zlib=True)
-		fh.createVariable('lat', float, ('lat'), zlib=True)
-		fh.createVariable('lon', float, ('lon'), zlib=True)
-		fh.createVariable('volume', float, ('depth', 'lat', 'lon'), zlib=True)
+		#fh.createVariable('depth', float, ('depth'), zlib=True)
+		#fh.createVariable('lat', float, ('lat'), zlib=True)
+		#fh.createVariable('lon', float, ('lon'), zlib=True)
+		#fh.createVariable('volume', float, ('depth', 'lat', 'lon'), zlib=True)
 
-		fh.variables['lat'].long_name 		= 'Latitudes'
-		fh.variables['depth'].long_name 	= 'Depth'
-		fh.variables['lon'].long_name 		= 'Longitudes'
-		fh.variables['volume'].long_name 	= 'Volume of gridcells taking partial bottom cells into account (layer_field * area)'
+		#fh.variables['lat'].long_name 		= 'Latitudes'
+		#fh.variables['depth'].long_name 	= 'Depth'
+		#fh.variables['lon'].long_name 		= 'Longitudes'
+		#fh.variables['volume'].long_name 	= 'Volume of gridcells taking partial bottom cells into account (layer_field * area)'
 
-		fh.variables['depth'].units 		= 'm'
-		fh.variables['lat'].units 		= 'degN'
-		fh.variables['lon'].units 		= 'degE'
+		#fh.variables['depth'].units 		= 'm'
+		#fh.variables['lat'].units 		= 'degN'
+		#fh.variables['lon'].units 		= 'degE'
 
 		#Writing data to correct variable
-		fh.variables['lat'][:] 			= lat
-		fh.variables['depth'][:] 		= depth
-		fh.variables['lon'][:] 			= lon
-		fh.variables['volume'][:] 		= volume
+		#fh.variables['lat'][:] 			= lat
+		#fh.variables['depth'][:] 		= depth
+		#fh.variables['lon'][:] 			= lon
+		#fh.variables['volume'][:] 		= volume
 
-		fh.close()
+		#fh.close()
 		
-		sys.exit()
+		#sys.exit()
 		
 		for depth_i in range(len(depth)):
 			for lat_i in range(len(lat)):	
@@ -184,7 +197,7 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 	#show()
 	#sys.exit()
 		
-	return lat, depth, volume_norm, grid_y, temp, salt, dens
+	return lat, depth, volume_norm, grid_y, temp, salt, dens, lon_min, lon_max, region
 	
 #-----------------------------------------------------------------------------------------
 #--------------------------------MAIN SCRIPT STARTS HERE----------------------------------
@@ -211,7 +224,7 @@ print(files[0])
 print(files[-1])
 
 #-----------------------------------------------------------------------------------------
-lat, depth, volume_norm, grid_y, temp, salt, dens	= ReadinData(files[0])
+lat, depth, volume_norm, grid_y, temp, salt, dens, lon_min, lon_max, region	= ReadinData(files[0])
 time_year				= ma.masked_all(year_end-year_start+1)
 temp_all				= ma.masked_all((len(time_year), len(depth), len(lat)))
 salt_all				= ma.masked_all((len(time_year), len(depth), len(lat)))
@@ -242,7 +255,7 @@ for year_i in range(len(time_year)):
 
 		print(filename)
 		#lat, depth, volume_norm, grid_y, temp_year[month_i] = ReadinData(filename)
-		lat, depth, volume_norm, grid_y, temp_year[month_i], salt_year[month_i], dens_year[month_i] = ReadinData(filename)
+		lat, depth, volume_norm, grid_y, temp_year[month_i], salt_year[month_i], dens_year[month_i], lon_min, lon_max, region = ReadinData(filename)
 
 	#------------------------------------------------------------------------------
 	month_days	= np.asarray([31., 28., 31., 30., 31., 30., 31., 31., 30., 31., 30., 31.])
@@ -275,13 +288,18 @@ dens_transect = np.nanmean(dens_all, axis = 0)
 #-----------------------------------------------------------------------------------------
 
 print('Data is written to file')
-fh = netcdf.Dataset(directory+'Ocean/TEMP_SALT_DENS_year_'+str(year_start)+'-'+str(year_end)+'_zonal_averaged_110W_60W_PA_SO.nc', 'w')
+fh = netcdf.Dataset(directory+'Ocean/TEMP_SALT_DENS_year_'+str(year_start)+'-'+str(year_end)+'_zonal_averaged_'+str(lon_min)+'E-'+str(lon_max)+'E_'+str(region)+'_SO.nc', 'w')
 
 fh.createDimension('lat', len(lat))
 fh.createDimension('depth', len(depth))
+fh.createDimension('time', len(time_year))
 
 fh.createVariable('lat', float, ('lat'), zlib=True)
 fh.createVariable('depth', float, ('depth'), zlib=True)
+fh.createVariable('time', float, ('time'), zlib=True)
+fh.createVariable('TEMP_all', float, ('time', 'depth', 'lat'), zlib=True)
+fh.createVariable('SALT_all', float, ('time', 'depth', 'lat'), zlib=True)
+fh.createVariable('PD_all', float, ('time', 'depth', 'lat'), zlib=True)
 fh.createVariable('TEMP', float, ('depth', 'lat'), zlib=True)
 fh.createVariable('SALT', float, ('depth', 'lat'), zlib=True)
 fh.createVariable('PD', float, ('depth', 'lat'), zlib=True)
@@ -290,9 +308,12 @@ fh.createVariable('DYT', float, ('lat'), zlib=True)
 fh.variables['lat'].long_name 		= 'Array of t-latitudes'
 fh.variables['DYT'].long_name		= 'Meridional grid spacing'
 fh.variables['depth'].long_name 	= 'Depth'
-fh.variables['TEMP'].long_name 		= 'Potential temperature'
-fh.variables['SALT'].long_name 		= 'Salinity'
-fh.variables['PD'].long_name 		= 'Potential density'
+fh.variables['TEMP'].long_name 		= 'Time averaged Potential temperature'
+fh.variables['SALT'].long_name 		= 'Time averaged Salinity'
+fh.variables['PD'].long_name 		= 'Time averaged Potential density'
+fh.variables['TEMP_all'].long_name 	= 'Potential temperature'
+fh.variables['SALT_all'].long_name 	= 'Salinity'
+fh.variables['PD_all'].long_name 	= 'Potential density'
 
 fh.variables['depth'].units 		= 'm'
 fh.variables['lat'].units 		= 'Degrees N'
@@ -300,6 +321,9 @@ fh.variables['DYT'].units		= 'm'
 fh.variables['TEMP'].units 		= 'deg C'
 fh.variables['SALT'].units 		= 'g / kg'
 fh.variables['PD'].units 		= 'kg/m^3'
+fh.variables['TEMP_all'].units 		= 'deg C'
+fh.variables['SALT_all'].units 		= 'g / kg'
+fh.variables['PD_all'].units 		= 'kg/m^3'
 
 #Writing data to correct variable
 fh.variables['depth'][:] 		= depth
@@ -308,6 +332,9 @@ fh.variables['DYT'][:]			= grid_y
 fh.variables['TEMP'][:] 		= temp_transect
 fh.variables['SALT'][:] 		= salt_transect
 fh.variables['PD'][:] 			= dens_transect
+fh.variables['TEMP_all'][:] 		= temp_all
+fh.variables['SALT_all'][:] 		= salt_all
+fh.variables['PD_all'][:] 		= dens_all
 
 fh.close()	
 	
