@@ -1,4 +1,4 @@
-#Program determines area averaged temperature or potential density in WKGP region
+#Program determines area averaged temperature in WKGP region
 
 from pylab import *
 import numpy
@@ -7,6 +7,7 @@ import time
 import glob, os
 import math
 import netCDF4 as netcdf
+import gsw
 
 #Making pathway to folder with all data
 directory_data	= '/projects/0/prace_imau/prace_2013081679/pop/tx0.1v2/pop.B2000.tx0.1v2.qe_hosing.001/tavg/'
@@ -48,19 +49,25 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 		
 	fh = netcdf.Dataset(filename, 'r')
 
-	#temp 		= fh.variables['TEMP'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index]		#Potential temperature (deg C)
-	
-	if 'PD' not in fh.variables:
-		PD = fh.variables['RHO'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] * 1000.  # In-situ density (kg/m^3)
-	else:
-		PD = fh.variables['PD'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] * 1000.  # Potential density (kg/m^3)
+	temp 		= fh.variables['TEMP'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index]		#Potential temperature (deg C)
+	salt 		= fh.variables['SALT'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] * 1000. 	#Salinity (g /kg)
+	#dens		= fh.variables['PD'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] * 1000.	#Potential density (kg / m3)
 	
 	fh.close()
 	
+	#Mask the area
+	temp		= ma.masked_where(salt <= 0, temp)	
+	salt		= ma.masked_where(salt <= 0, salt)
+	
+	PD 		= ma.masked_all((len(depth), len(lat), len(lon)))
+	
 	for depth_i in range(len(depth)):
-		#Mask all the field at the topography
-		#temp[depth_i]	= ma.masked_where(depth_grid <= depth_top[depth_i], temp[depth_i])
-		PD[depth_i]	= ma.masked_where(depth_grid <= depth_top[depth_i], PD[depth_i])
+		#print(depth_i)
+		#First determine the conservative temperature from the potential temperature
+		temp_CT		= gsw.CT_from_pt(salt[depth_i], temp[depth_i])
+		
+		#Get the potential density
+		PD[depth_i]		= gsw.sigma0(salt[depth_i], temp_CT)+1000.0
 
 	#------------------------------------------------------------------------------
 	if layer_avail	== False:	
@@ -91,23 +98,13 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 		volume			= ma.masked_where(volume <= 0, volume)
 		volume_norm		= ma.masked_all(np.shape(volume))
 		
-		for depth_i in range(len(depth)):
-			for lat_i in range(len(lat)):	
+		#for depth_i in range(len(depth)):
+		#	for lat_i in range(len(lat)):	
 				#Normalise the field for each latitude and depth layer
-				volume_norm[depth_i, lat_i]	= volume[depth_i, lat_i] / np.sum(volume[depth_i, lat_i])
+			#	volume_norm[depth_i, lat_i]	= volume[depth_i, lat_i] / np.sum(volume[depth_i, lat_i])
 				
-	#Take the volume-averaged zonal mean for temperature
-	PD		= np.sum(PD * volume_norm, axis = 2)
-	
-	#Take also mean in latitudinal direction
-	PD = np.nanmean(PD, axis=1)
-	
-	#print(np.min(dens))
-	
-	#CS	= contourf(lat, depth, dens, levels = np.arange(1024, 1030.1, 0.1), extend = 'both', cmap = 'Spectral_r')
-	#colorbar(CS)
-	#show()
-	#sys.exit()
+		#Take volume-weighted mean at each depth level
+		PD = (ma.sum(PD * volume, axis=(1, 2)) / ma.sum(volume, axis=(1, 2)))
 		
 	return depth, volume_norm, PD
 	
@@ -116,7 +113,7 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 #-----------------------------------------------------------------------------------------
 
 #First year has no PD or RHO data
-year_start	= 2
+year_start	= 1
 year_end	= 600
 
 files = []
@@ -181,7 +178,7 @@ for year_i in range(len(time_year)):
 	#-----------------------------------------------------------------------------------------
 
 	print('Data is written to file')
-	fh = netcdf.Dataset(directory+'Ocean/PD_year_'+str(year_start)+'-'+str(year_end)+'_area_averaged_WGKP.nc', 'w')
+	fh = netcdf.Dataset(directory+'Ocean/PD_gsw_year_'+str(year_start)+'-'+str(year_end)+'_area_averaged_WGKP.nc', 'w')
 
 	fh.createDimension('time', len(time_year))
 	fh.createDimension('depth', len(depth))
