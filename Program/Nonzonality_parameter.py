@@ -220,7 +220,7 @@ for year_i in range(len(time_year)):
 		V2U2 = V2/U2
 
 		#Volume integratedv
-		V2U2_int[year_i - window + 1] = np.sum(V2U2*volume)
+		V2U2_int[year_i - window + 1] = np.sum(V2U2*volume) / np.sum(volume)
 	
 	#-----------------------------------------------------------------------------------------
 	#-----------------------------------------------------------------------------------------
