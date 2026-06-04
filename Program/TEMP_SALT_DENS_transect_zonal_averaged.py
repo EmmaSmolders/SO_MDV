@@ -38,7 +38,7 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 	lat_min = -90
 	lat_max = 10
 	
-	region 		= 'Atlantic' #'Indian', or 'Atlantic', or 'NZ', or 'AU', or 'PA', or 'WGKP'. For 'Pacific', see other script
+	region 		= 'NZ' #'Indian', or 'Atlantic', or 'NZ', or 'AU', or 'PA', or 'WGKP'. For 'Pacific', see other script
 	
 	if region	== 'Indian':
 		#Use negative longitudes for 180W - 0W
@@ -53,7 +53,7 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 		lon_max 	= 25	
 		
 	elif region 	== 'NZ': #We don't want negative longitudes here
-		lon_min 	= 150
+		lon_min 	= 160
 		lon_max 	= 190
 
 	elif region 	== 'AU':
@@ -197,15 +197,15 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 	#show()
 	#sys.exit()
 		
-	return lat, depth, volume_norm, grid_y, temp, salt, dens, lon_min, lon_max, region
+	return lat, depth, volume_norm, grid_y, temp, salt, dens, lon_min, lon_max, lat_min, lat_max, region
 	
 #-----------------------------------------------------------------------------------------
 #--------------------------------MAIN SCRIPT STARTS HERE----------------------------------
 #-----------------------------------------------------------------------------------------
 
 #First or last 100 years
-year_start	= 500
-year_end	= 600
+year_start	= 1
+year_end	= 100
 
 files = []
 
@@ -224,7 +224,7 @@ print(files[0])
 print(files[-1])
 
 #-----------------------------------------------------------------------------------------
-lat, depth, volume_norm, grid_y, temp, salt, dens, lon_min, lon_max, region	= ReadinData(files[0])
+lat, depth, volume_norm, grid_y, temp, salt, dens, lon_min, lon_max, lat_min, lat_max, region	= ReadinData(files[0])
 time_year				= ma.masked_all(year_end-year_start+1)
 temp_all				= ma.masked_all((len(time_year), len(depth), len(lat)))
 salt_all				= ma.masked_all((len(time_year), len(depth), len(lat)))
@@ -255,7 +255,7 @@ for year_i in range(len(time_year)):
 
 		print(filename)
 		#lat, depth, volume_norm, grid_y, temp_year[month_i] = ReadinData(filename)
-		lat, depth, volume_norm, grid_y, temp_year[month_i], salt_year[month_i], dens_year[month_i], lon_min, lon_max, region = ReadinData(filename)
+		lat, depth, volume_norm, grid_y, temp_year[month_i], salt_year[month_i], dens_year[month_i], lon_min, lon_max, lat_min, lat_max, region = ReadinData(filename)
 
 	#------------------------------------------------------------------------------
 	month_days	= np.asarray([31., 28., 31., 30., 31., 30., 31., 31., 30., 31., 30., 31.])
@@ -288,7 +288,7 @@ dens_transect = np.nanmean(dens_all, axis = 0)
 #-----------------------------------------------------------------------------------------
 
 print('Data is written to file')
-fh = netcdf.Dataset(directory+'Ocean/TEMP_SALT_DENS_year_'+str(year_start)+'-'+str(year_end)+'_zonal_averaged_'+str(lon_min)+'E-'+str(lon_max)+'E_'+str(region)+'_SO.nc', 'w')
+fh = netcdf.Dataset(directory+'Ocean/TEMP_SALT_DENS_year_'+str(year_start)+'-'+str(year_end)+'_zonal_averaged_'+str(lon_min)+'E-'+str(lon_max)+'E_'+str(region)+'_'+str(lat_min)+'N-'+str(lat_max)+'N_SO.nc', 'w')
 
 fh.createDimension('lat', len(lat))
 fh.createDimension('depth', len(depth))
