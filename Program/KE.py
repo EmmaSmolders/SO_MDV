@@ -51,24 +51,25 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 	#print(np.shape(lon))
 	#print(np.min(lon))
 
-	#Select region (SO30 region or WGKP region)
-	#lon_min_index	= (fabs(lon - -35)).argmin()
-	#lon_max_index	= (fabs(lon - 80)).argmin() + 1
-	#lat_min_index	= (fabs(lat - -90)).argmin()
-	#lat_max_index	= (fabs(lat - -50)).argmin() + 1
-	
-	#lon_min_index	= (fabs(lon - -35)).argmin()
-	#lon_max_index	= (fabs(lon - -34)).argmin() + 1
+	#Select region (WGKP region)
+	lon_min_index	= (fabs(lon - -60)).argmin()
+	lon_max_index	= (fabs(lon - 25)).argmin() + 1
 	lat_min_index	= (fabs(lat - -90)).argmin()
 	lat_max_index	= (fabs(lat - -30)).argmin() + 1
 	
-	#print(lat_min_index)
-	#print(lat_max_index)	
-		
-	#lon		= lon[lon_min_index:lon_max_index]
+	lon		= lon[lon_min_index:lon_max_index]
 	lat		= lat[lat_min_index:lat_max_index]
-	depth_grid	= depth_grid[lat_min_index:lat_max_index, :]
-	area		= area[lat_min_index:lat_max_index, :]
+	depth_grid	= depth_grid[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
+	area		= area[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
+	
+	#Select region (SO30 region)
+	#lat_min_index	= (fabs(lat - -90)).argmin()
+	#lat_max_index	= (fabs(lat - -30)).argmin() + 1
+	
+	#lon		= lon
+	#lat		= lat[lat_min_index:lat_max_index]
+	#depth_grid	= depth_grid[lat_min_index:lat_max_index, :]
+	#area		= area[lat_min_index:lat_max_index, :]
 	
 	#print(lon)
 	#print(lat)
@@ -77,8 +78,12 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 		
 	fh = netcdf.Dataset(filename, 'r')
 
-	u_vel 		= fh.variables['UVEL'][:, lat_min_index:lat_max_index, :] / 100.0	#Zonal velocity (m/s)
-	v_vel 		= fh.variables['VVEL'][:, lat_min_index:lat_max_index, :] / 100.0	#Meridional velocity (m/s)
+	#u_vel 		= fh.variables['UVEL'][:, lat_min_index:lat_max_index, :] / 100.0	#Zonal velocity (m/s)
+	#v_vel 		= fh.variables['VVEL'][:, lat_min_index:lat_max_index, :] / 100.0	#Meridional velocity (m/s)
+	
+	u_vel 		= fh.variables['UVEL'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] / 100.0	#Zonal velocity (m/s)
+	v_vel 		= fh.variables['VVEL'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] / 100.0	#Meridional velocity (m/s)
+
 	
 	fh.close()
 	
@@ -123,7 +128,7 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 #-----------------------------------------------------------------------------------------
 
 #First SOM cycle (model year 63-114), second (324-378) or last SOM cycle (500-600)
-year_start	= 500
+year_start	= 63
 year_end	= 600
 
 window = 5
@@ -219,7 +224,7 @@ for year_i in range(len(time_year)):
 	#-----------------------------------------------------------------------------------------
 	#continue
 	print('Data is written to file')
-	fh = netcdf.Dataset(directory+'Ocean/KE_year_'+str(year_start)+'-'+str(year_end)+'_window_'+str(window)+'_volume_integrated_SO30_finalcode.nc', 'w')
+	fh = netcdf.Dataset(directory+'Ocean/KE_year_'+str(year_start)+'-'+str(year_end)+'_window_'+str(window)+'_volume_integrated_Atlantic_finalcode.nc', 'w')
 
 	fh.createDimension('time', len(time_year) - window + 1)
 	fh.createDimension('lat', len(lat))
