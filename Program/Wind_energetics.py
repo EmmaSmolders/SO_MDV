@@ -1,4 +1,4 @@
-#Program determines wind energy input for SO30 region
+#Program determines wind energy input
 
 from pylab import *
 import numpy
@@ -31,33 +31,25 @@ def ReadinData(filename):
 	
 	#Use negative longitudes for 180W - 0W
 	lon[lon>180]	= lon[lon>180] - 360.0
-	
-	#Select region (WGKP region)
-	#lon_min_index	= (fabs(lon - -35)).argmin()
-	#lon_max_index	= (fabs(lon - 80)).argmin() + 1
-	#lat_min_index	= (fabs(lat - -90)).argmin()
-	#lat_max_index	= (fabs(lat - -50)).argmin() + 1
-	
-	#lon		= lon[lon_min_index:lon_max_index]
-	#lat		= lat[lat_min_index:lat_max_index]
-	#depth_u		= depth_u[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
-	#area		= area[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
 
-	#Select region (SO30)
+	#Select region
+	lon_min_index	= (fabs(lon - -60)).argmin()
+	lon_max_index	= (fabs(lon - 25)).argmin() + 1
 	lat_min_index	= (fabs(lat - -90)).argmin()
 	lat_max_index	= (fabs(lat - -30)).argmin() + 1	
 	
+	lon		= lon[lon_min_index:lon_max_index]
 	lat		= lat[lat_min_index:lat_max_index]
-	depth_u	= depth_u[lat_min_index:lat_max_index, :]
-	area		= area[lat_min_index:lat_max_index, :]
+	depth_u		= depth_u[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
+	area		= area[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
 	
 	fh = netcdf.Dataset(filename, 'r')
 
 	#Get the relevant region
-	tau_x 		= fh.variables['TAUX'][lat_min_index:lat_max_index, :]		#Horizontal windstress (dyne/cm^2 = g/(cm * s^2))
-	tau_y 		= fh.variables['TAUY'][lat_min_index:lat_max_index, :]		#Meridional windstress (dyne/cm^2)
-	u_vel 		= fh.variables['UVEL'][0, lat_min_index:lat_max_index, :] 		#Surface zonal velocity (cm/s)
-	v_vel 		= fh.variables['VVEL'][0, lat_min_index:lat_max_index, :] 		#Surface meridional velocity (cm/s)
+	tau_x 		= fh.variables['TAUX'][lat_min_index:lat_max_index, lon_min_index:lon_max_index]		#Horizontal windstress (dyne/cm^2 = g/(cm * s^2))
+	tau_y 		= fh.variables['TAUY'][lat_min_index:lat_max_index, lon_min_index:lon_max_index]		#Meridional windstress (dyne/cm^2)
+	u_vel 		= fh.variables['UVEL'][0, lat_min_index:lat_max_index, lon_min_index:lon_max_index] 		#Surface zonal velocity (cm/s)
+	v_vel 		= fh.variables['VVEL'][0, lat_min_index:lat_max_index, lon_min_index:lon_max_index] 		#Surface meridional velocity (cm/s)
 
 	fh.close()
 	
@@ -77,11 +69,8 @@ def ReadinData(filename):
 #-----------------------------------------------------------------------------------------
 
 #Second SOM cycle (model year 63-114), second (324-378) or last SOM cycle (500-600)
-year_start	= 324
-year_end	= 378
-
-#Moving average window
-window = 5
+year_start	= 63
+year_end	= 600
 
 files = []
 
@@ -94,7 +83,7 @@ for file_i in range(len(files_all)):
 		files.append(files_all[file_i])
 
 #note that january 300 does not exist and that february 300 does not have PD data. 
-files	= files[(year_start-1)*12:year_end*12]
+files	= files[year_start*12-1:year_end*12]
 
 print(files[0])
 print(files[-1])
@@ -102,13 +91,22 @@ print(files[-1])
 #-----------------------------------------------------------------------------------------
 
 lat, lon, area, tau_x, tau_y, u_vel, v_vel	= ReadinData(files[0])
-time_year					= np.arange(year_start, year_end+1)
+time_year					= ma.masked_all(year_end-year_start+1)
 tau_x_all					= ma.masked_all((len(time_year), len(lat), len(lon)))
 tau_y_all					= ma.masked_all((len(time_year), len(lat), len(lon)))
 u_vel_all					= ma.masked_all((len(time_year), len(lat), len(lon)))
 v_vel_all					= ma.masked_all((len(time_year), len(lat), len(lon)))
-u_vel_tau_x_all					= ma.masked_all((len(time_year)*12, len(lat), len(lon)))
-v_vel_tau_y_all					= ma.masked_all((len(time_year)*12, len(lat), len(lon)))
+u_vel_tau_x_all					= ma.masked_all((len(time_year), len(lat), len(lon)))
+v_vel_tau_y_all					= ma.masked_all((len(time_year), len(lat), len(lon)))
+
+print(lat)
+print(lon)
+print(np.shape(lat))
+print(np.shape(lon))
+print(np.shape(tau_x))
+print(np.shape(tau_y))
+print(np.shape(u_vel))
+print(np.shape(v_vel))
 
 #-----------------------------------------------------------------------------------------
 
@@ -127,14 +125,18 @@ for year_i in range(len(time_year)):
 		print(year_i+300+year_start-1)
 		
 		#Get the monthly files (data from last 90 years for forward hosing is in subfolder)
-		filename 	= files[year_i*12 + month_i]
+		filename	= directory_data+'t.t0.1_42l_nccs01.'+str(year_i+300+year_start-1).zfill(4)+str(month_i+1).zfill(2)+'.nc'
 		print(filename)
+		
+		#January of model year 300 and 810 are missing
+		if year_i+300+year_start-1 == 300 and month_i == 0:
+			filename = directory_data+'t.t0.1_42l_nccs01.'+str(301).zfill(4)+str(month_i+1).zfill(2)+'.nc'
+			
+		#if year_i+300+year_start-1 == 809 and month_i == 0:
+		#	filename = directory_data+'t.t0.1_42l_nccs01.'+str(811).zfill(4)+str(month_i+1).zfill(2)+'.nc'
 
 		print(filename)
 		lat, lon, area, tau_x_year[month_i], tau_y_year[month_i], u_vel_year[month_i], v_vel_year[month_i] = ReadinData(filename)
-		
-		u_vel_tau_x_all[year_i*12 + month_i] = u_vel_year[month_i]*tau_x_year[month_i]
-		v_vel_tau_y_all[year_i*12 + month_i] = v_vel_year[month_i]*tau_y_year[month_i]
 
 	#------------------------------------------------------------------------------
 	month_days	= np.asarray([31., 28., 31., 30., 31., 30., 31., 31., 30., 31., 30., 31.])
@@ -153,8 +155,13 @@ for year_i in range(len(time_year)):
 	tau_y_all[year_i]	= np.sum(tau_y_year * month_days_all, axis = 0)
 	u_vel_all[year_i]	= np.sum(u_vel_year * month_days_all, axis = 0)
 	v_vel_all[year_i]	= np.sum(v_vel_year * month_days_all, axis = 0)
+	u_vel_tau_x_all[year_i] = np.sum((u_vel_year*tau_x_year) * month_days_all, axis = 0)
+	v_vel_tau_y_all[year_i] = np.sum((v_vel_year*tau_y_year) * month_days_all, axis = 0)
 
 #-----------------------------------------------------------------------------------------
+
+#Moving average window
+window = 5
 
 gKm  		= ma.masked_all((len(time_year) - window + 1, len(lat), len(lon)))
 gKe  		= ma.masked_all((len(time_year) - window + 1, len(lat), len(lon)))
@@ -163,7 +170,13 @@ gKtotal  	= ma.masked_all((len(time_year) - window + 1, len(lat), len(lon)))
 for time_i in range(len(time_year) - window + 1):
 	#Determine mean and eddy kinetic energy generation
 	gKm[time_i, :, :]	= (np.mean(u_vel_all[time_i:time_i+window, :, :], axis = 0)*np.mean(tau_x_all[time_i:time_i+window, :, :], axis = 0) + np.mean(v_vel_all[time_i:time_i+window, :, :], axis = 0)*np.mean(tau_y_all[time_i:time_i+window, :, :], axis = 0))*1.0e-03	#Mean kinetic energy generation [kg/s^3]
-	gKtotal[time_i, :, :]	= np.mean(u_vel_tau_x_all[time_i*12:(time_i+window)*12, :, :] + v_vel_tau_y_all[time_i*12:(time_i+window)*12, :, :], axis=0)*1.0e-03
+	#u_prime 		= u_vel_all - np.mean(u_vel_all[time_i:time_i+window, :, :], axis = 0)
+	#v_prime 		= v_vel_all - np.mean(v_vel_all[time_i:time_i+window, :, :], axis = 0)
+	#tau_x_prime 		= tau_x_all - np.mean(tau_x_all[time_i:time_i+window, :, :], axis = 0)
+	#tau_y_prime 		= tau_y_all - np.mean(tau_y_all[time_i:time_i+window, :, :], axis = 0)
+	#u_tau_x_prime 		= u_prime * tau_x_prime
+	#v_tau_y_prime 		= v_prime * tau_y_prime
+	gKtotal[time_i, :, :]	= np.mean(u_vel_tau_x_all[time_i:time_i+window, :, :] + v_vel_tau_y_all[time_i:time_i+window, :, :], axis=0)*1.0e-03
 	gKe[time_i, :, :]	= gKtotal[time_i, :, :] - gKm[time_i, :, :]	#Eddy kinetic energy generation [kg/s^3]
 
 #Surface integrated energetics
@@ -180,7 +193,7 @@ for time_i in range(len(time_year) - window + 1):
 #-----------------------------------------------------------------------------------------
 
 print('Data is written to file')
-fh = netcdf.Dataset(directory+'Ocean/Generation_KE_year_'+str(year_start)+'-'+str(year_end)+'_window_'+str(window)+'_area_integrated_SO30.nc', 'w')
+fh = netcdf.Dataset(directory+'Ocean/Generation_KE_year_'+str(year_start)+'-'+str(year_end)+'_window_'+str(window)+'_area_integrated_Atlantic.nc', 'w')
 
 fh.createDimension('time', len(time_year) - window + 1)
 fh.createDimension('lat', len(lat))
