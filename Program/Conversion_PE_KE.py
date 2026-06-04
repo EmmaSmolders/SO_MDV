@@ -7,6 +7,7 @@ import time
 import glob, os
 import math
 import netCDF4 as netcdf
+import gsw
 
 #Making pathway to folder with all data
 directory_data		= '/projects/0/prace_imau/prace_2013081679/pop/tx0.1v2/pop.B2000.tx0.1v2.qe_hosing.001/tavg/'
@@ -37,19 +38,24 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 	#Use negative longitudes for 180W - 0W
 	lon[lon>180]	= lon[lon>180] - 360.0
 
-	#Select region (SO30 or WGKP region)
-	lon_min_index	= (fabs(lon - -35)).argmin()
-	lon_max_index	= (fabs(lon - 80)).argmin() + 1
+	#Select region (Atlantic region)
+	lon_min_index	= (fabs(lon - -60)).argmin()
+	lon_max_index	= (fabs(lon - 25)).argmin() + 1
 	lat_min_index	= (fabs(lat - -90)).argmin()
-	lat_max_index	= (fabs(lat - -50)).argmin() + 1
-	
-	#lat_min_index	= (fabs(lat - -90)).argmin()
-	#lat_max_index	= (fabs(lat - -30)).argmin() + 1
+	lat_max_index	= (fabs(lat - -30)).argmin() + 1
 	
 	lon		= lon[lon_min_index:lon_max_index]
 	lat		= lat[lat_min_index:lat_max_index]
 	depth_grid	= depth_grid[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
 	area		= area[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
+	
+	#Select region (SO30 region)
+	#lat_min_index	= (fabs(lat - -90)).argmin()
+	#lat_max_index	= (fabs(lat - -30)).argmin() + 1
+	
+	#lat		= lat[lat_min_index:lat_max_index]
+	#depth_grid	= depth_grid[lat_min_index:lat_max_index, :]
+	#area		= area[lat_min_index:lat_max_index, :]
 	
 	#print(lon)
 	#print(lat)
@@ -58,16 +64,34 @@ def ReadinData(filename, layer_avail = False, volume_norm = False):
 		
 	fh = netcdf.Dataset(filename, 'r')
 
-	PD 		= fh.variables['PD'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index]*1000 	#Potential density (kg/m^3)
+	#PD 		= fh.variables['PD'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index]*1000 - 1026	#Potential density (kg/m^3) - rho0
+	#PD 		= fh.variables['PD'][:, lat_min_index:lat_max_index, :]*1000 - 1026	#Potential density (kg/m^3) - rho0
+	temp 		= fh.variables['TEMP'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index] 	#Potential temperature (degC)
+	salt 		= fh.variables['SALT'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index]*1000 	#Salinity (g/kg)
 	
 	fh.close()
+	
+	#Mask the area
+	temp		= ma.masked_where(salt <= 0, temp)	
+	salt		= ma.masked_where(salt <= 0, salt)
+	
+	PD 		= ma.masked_all((len(depth), len(lat), len(lon)))
+	
+	for depth_i in range(len(depth)):
+		#print(depth_i)
+		#First determine the conservative temperature from the potential temperature
+		temp_CT		= gsw.CT_from_pt(salt[depth_i], temp[depth_i])
+		
+		#Get the potential density
+		PD[depth_i]		= gsw.sigma0(salt[depth_i], temp_CT)+1000.0 - 1026 #PD - rho0
+	
 	
 	#print(np.where(PD < 0))
 	#print(np.nanmean(PD))
 	
-	for depth_i in range(len(depth)):
+	#for depth_i in range(len(depth)):
 		#Mask all the field at the topography
-		PD[depth_i]	= ma.masked_where(depth_grid <= depth_top[depth_i], PD[depth_i])
+	#	PD[depth_i]	= ma.masked_where(depth_grid <= depth_top[depth_i], PD[depth_i])
 
 	#------------------------------------------------------------------------------
 	#Make volume on T-grid
@@ -123,23 +147,30 @@ def ReadinDataWVEL(filename, layer_avail = False, volume_norm = False):
 	#Use negative longitudes for 180W - 0W
 	lon[lon>180]	= lon[lon>180] - 360.0
 
-	#Select region (SO30 or WGKP region)
-	lon_min_index	= (fabs(lon - -35)).argmin()
-	lon_max_index	= (fabs(lon - 80)).argmin() + 1
+	#Select region (WGKP region)
+	lon_min_index	= (fabs(lon - -60)).argmin()
+	lon_max_index	= (fabs(lon - 25)).argmin() + 1
 	lat_min_index	= (fabs(lat - -90)).argmin()
-	lat_max_index	= (fabs(lat - -50)).argmin() + 1
-	
-	#lat_min_index	= (fabs(lat - -90)).argmin()
-	#lat_max_index	= (fabs(lat - -30)).argmin() + 1
+	lat_max_index	= (fabs(lat - -30)).argmin() + 1
 	
 	lon		= lon[lon_min_index:lon_max_index]
 	lat		= lat[lat_min_index:lat_max_index]
 	depth_grid	= depth_grid[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
 	area		= area[lat_min_index:lat_max_index, lon_min_index:lon_max_index]
+	
+	#Select region (SO30 region)
+	#lat_min_index	= (fabs(lat - -90)).argmin()
+	#lat_max_index	= (fabs(lat - -30)).argmin() + 1
+	
+	#lon		= lon
+	#lat		= lat[lat_min_index:lat_max_index]
+	#depth_grid	= depth_grid[lat_min_index:lat_max_index, :]
+	#area		= area[lat_min_index:lat_max_index, :]
 		
 	fh = netcdf.Dataset(filename, 'r')
 
 	w_vel 		= fh.variables['WVEL'][:, lat_min_index:lat_max_index, lon_min_index:lon_max_index]/ 100.0	#Vertical velocity (m/s)
+	#w_vel 		= fh.variables['WVEL'][:, lat_min_index:lat_max_index, :]/ 100.0	#Vertical velocity (m/s)
 	
 	fh.close()
 	
@@ -187,8 +218,8 @@ def wtt2ttt(W_FIELD, DZT):
 #-----------------------------------------------------------------------------------------
 
 #First SOM cycle (model year 63-114), second (324-378) or last SOM cycle (500-600)
-year_start	= 324
-year_end	= 378
+year_start	= 63
+year_end	= 600
 
 window = 5
 window_counter = 0
@@ -311,6 +342,9 @@ for year_i in range(len(time_year)):
 		PD_mean		= np.mean(PD_all, axis = 0)
 		PDW_mean	= np.mean(PDW_all, axis = 0)
 		
+		print(np.mean(w_vel_mean))
+		print(np.mean(PD_mean))
+		
 		TTT_PDW = wtt2ttt(PDW_mean, layer)
 		cPKt = -g * TTT_PDW
 		
@@ -328,52 +362,60 @@ for year_i in range(len(time_year)):
     
     			cPKm[k, :, :] = -g * 0.25 * cPKm[k, :, :]
     			cPKe[k, :, :] = cPKt[k, :, :] - cPKm[k, :, :]
+    			
+		#print(np.mean(cPKm))
+		#print(np.mean(cPKt))
+		#print(np.mean(cPKe))
 
 		# Volume integrated
 		C_mean_int[year_i - window + 1] 	= np.sum(cPKm * volume)
 		C_total_int[year_i - window + 1] 	= np.sum(cPKt * volume)
 		C_eddy_int[year_i - window + 1] 	= np.sum(cPKe * volume)
+		
+		#print(C_mean_int[year_i - window + 1])
+		#print(C_eddy_int[year_i - window + 1])
+		#sys.exit()
 
-#-----------------------------------------------------------------------------------------
-#-----------------------------------------------------------------------------------------
+	#-----------------------------------------------------------------------------------------
+	#-----------------------------------------------------------------------------------------
 
-print('Data is written to file')
-fh = netcdf.Dataset(directory+'Ocean/Conversion_PE_KE_year_'+str(year_start)+'-'+str(year_end)+'_'+str(window)+'_volume_integrated_WGKP_testjuling.nc', 'w')
+	print('Data is written to file')
+	fh = netcdf.Dataset(directory+'Ocean/Conversion_PE_KE_year_'+str(year_start)+'-'+str(year_end)+'_'+str(window)+'_volume_integrated_Atlantic_testjuling.nc', 'w')
 
-fh.createDimension('time', len(time_year) - window + 1)
-fh.createDimension('lat', len(lat))
-fh.createDimension('lon', len(lon))
+	fh.createDimension('time', len(time_year) - window + 1)
+	fh.createDimension('lat', len(lat))
+	fh.createDimension('lon', len(lon))
 
-fh.createVariable('time', float, ('time'), zlib=True)
-fh.createVariable('lat', float, ('lat'), zlib=True)
-fh.createVariable('lon', float, ('lon'), zlib=True)
-fh.createVariable('C_mean', float, ('time'), zlib=True)
-fh.createVariable('C_total', float, ('time'), zlib=True)
-fh.createVariable('C_eddy', float, ('time'), zlib=True)
+	fh.createVariable('time', float, ('time'), zlib=True)
+	fh.createVariable('lat', float, ('lat'), zlib=True)
+	fh.createVariable('lon', float, ('lon'), zlib=True)
+	fh.createVariable('C_mean', float, ('time'), zlib=True)
+	fh.createVariable('C_total', float, ('time'), zlib=True)
+	fh.createVariable('C_eddy', float, ('time'), zlib=True)
 
-fh.variables['time'].long_name 		= 'Starting year of window'
-fh.variables['lat'].long_name		= 'Latitudes for surface integration'
-fh.variables['lon'].long_name		= 'Longitudes for surface integration'
-fh.variables['C_total'].long_name 	= 'Volume integrated total conversion energy'
-fh.variables['C_mean'].long_name 	= 'Volume integrated mean conversion energy'
-fh.variables['C_eddy'].long_name 	= 'Volume integrated eddy conversion energy'
+	fh.variables['time'].long_name 		= 'Starting year of window'
+	fh.variables['lat'].long_name		= 'Latitudes for surface integration'
+	fh.variables['lon'].long_name		= 'Longitudes for surface integration'
+	fh.variables['C_total'].long_name 	= 'Volume integrated total conversion energy'
+	fh.variables['C_mean'].long_name 	= 'Volume integrated mean conversion energy'
+	fh.variables['C_eddy'].long_name 	= 'Volume integrated eddy conversion energy'
 
-fh.variables['time'].units 	= 'year'
-fh.variables['lat'].units 	= 'Degrees N'
-fh.variables['lon'].units 	= 'Degrees E'
-fh.variables['C_mean'].units 	= 'W'
-fh.variables['C_total'].units 	= 'W'
-fh.variables['C_eddy'].units 	= 'W'
+	fh.variables['time'].units 	= 'year'
+	fh.variables['lat'].units 	= 'Degrees N'
+	fh.variables['lon'].units 	= 'Degrees E'
+	fh.variables['C_mean'].units 	= 'W'
+	fh.variables['C_total'].units 	= 'W'
+	fh.variables['C_eddy'].units 	= 'W'
 
-#Writing data to correct variable
-fh.variables['time'][:] 	= time_year[:len(time_year) - window + 1]
-fh.variables['lat'][:] 		= lat
-fh.variables['lon'][:] 		= lon
-fh.variables['C_total'][:] 	= C_total_int
-fh.variables['C_mean'][:] 	= C_mean_int
-fh.variables['C_eddy'][:] 	= C_eddy_int
+	#Writing data to correct variable
+	fh.variables['time'][:] 	= time_year[:len(time_year) - window + 1]
+	fh.variables['lat'][:] 		= lat
+	fh.variables['lon'][:] 		= lon
+	fh.variables['C_total'][:] 	= C_total_int
+	fh.variables['C_mean'][:] 	= C_mean_int
+	fh.variables['C_eddy'][:] 	= C_eddy_int
 
-fh.close()	
+	fh.close()	
 	
 	
 	
